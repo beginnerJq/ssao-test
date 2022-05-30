@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>
+      three.js webgl - postprocessing - Screen Space Ambient Occlusion
+    </title>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+    />
+    <style>
+      body {
+        background-color: #aaa;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a>
+      - screen space ambient occlusion<br />
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three/build/three.module.js",
+          "three-addons/": "https://unpkg.com/three/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from 'three';
+
+      import Stats from 'three-addons/libs/stats.module.js';
+      import { GUI } from 'three-addons/libs/lil-gui.module.min.js';
+
+      import { EffectComposer } from 'three-addons/postprocessing/EffectComposer.js';
+      import { SSAOPass } from 'three-addons/postprocessing/SSAOPass.js';
+      import { GLTFLoader } from 'three-addons/loaders/GLTFLoader.js';
+      import { DRACOLoader } from 'three-addons/loaders/DRACOLoader.js';
+      import { OrbitControls } from 'three-addons/controls/OrbitControls.js';
+      import { RoomEnvironment } from 'three-addons/environments/RoomEnvironment.js';
+      let container, stats;
+      let camera, scene, renderer;
+      let composer;
+      let group;
+
+      init();
+      animate();
+
+      function init() {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(2);
+        document.body.appendChild(renderer.domElement);
+
+        camera = new THREE.PerspectiveCamera(
+          65,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          700
+        );
+        camera.position.z = 500;
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xaaaaaa);
+
+        group = new THREE.Group();
+        scene.add(group);
+
+        const environment = new RoomEnvironment();
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        scene.background = new THREE.Color(0xbbbbbb);
+        scene.environment = pmremGenerator.fromScene(environment).texture;
+
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath(
+          'https://unpkg.com/three/examples/js/libs/draco/gltf/'
+        );
+
+        const loader = new GLTFLoader().setPath('./');
+        loader.setDRACOLoader(dracoLoader);
+        loader.load('111.gltf', function (gltf) {
+          gltf.scene.rotation.x = -Math.PI / 2;
+          gltf.scene.scale.x = 10;
+          gltf.scene.scale.y = 10;
+          gltf.scene.scale.z = 10;
+          group.add(gltf.scene);
+          render();
+        });
+
+        stats = new Stats();
+        container.appendChild(stats.dom);
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        composer = new EffectComposer(renderer);
+
+        const ssaoPass = new SSAOPass(scene, camera, width, height);
+        ssaoPass.kernelRadius = 2;
+        ssaoPass.minDistance = 0.005;
+        ssaoPass.maxDistance = 0.01;
+        composer.addPass(ssaoPass);
+        ssaoPass;
+        // Init gui
+        const gui = new GUI();
+
+        gui
+          .add(ssaoPass, 'output', {
+            Default: SSAOPass.OUTPUT.Default,
+            'SSAO Only': SSAOPass.OUTPUT.SSAO,
+            'SSAO Only + Blur': SSAOPass.OUTPUT.Blur,
+            Beauty: SSAOPass.OUTPUT.Beauty,
+            Depth: SSAOPass.OUTPUT.Depth,
+            Normal: SSAOPass.OUTPUT.Normal,
+          })
+          .onChange(function (value) {
+            ssaoPass.output = parseInt(value);
+          });
+        gui.add(ssaoPass, 'kernelRadius').min(0).max(32);
+        gui.add(ssaoPass, 'minDistance').min(0.001).max(0.02);
+        gui.add(ssaoPass, 'maxDistance').min(0.01).max(0.3);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.addEventListener('change', render); // use if there is no animation loop
+        controls.minDistance = 0.1;
+        controls.maxDistance = 10000;
+        controls.target.set(10, 90, -16);
+        controls.update();
+
+        window.addEventListener('resize', onWindowResize);
+      }
+
+      function onWindowResize() {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(width, height);
+        composer.setSize(width, height);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        stats.begin();
+        render();
+        stats.end();
+      }
+
+      function render() {
+        // const timer = performance.now();
+        // group.rotation.x = timer * 0.0002;
+        // group.rotation.y = timer * 0.0001;
+
+        composer.render();
+      }
+    </script>
+  </body>
+</html>
